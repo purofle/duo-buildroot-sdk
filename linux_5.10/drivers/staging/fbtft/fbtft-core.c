@@ -18,6 +18,8 @@
 #include <linux/fb.h>
 #include <linux/gpio/consumer.h>
 #include <linux/spi/spi.h>
+#include <linux/gpio.h>
+#include <linux/of_gpio.h>
 #include <linux/delay.h>
 #include <linux/uaccess.h>
 #include <linux/backlight.h>

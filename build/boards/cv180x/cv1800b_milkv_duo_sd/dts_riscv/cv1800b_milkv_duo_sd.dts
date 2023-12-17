@@ -43,6 +43,10 @@
 }
 
 / {
-
+	es8388: es8388 {
+		#sound-dai-cells = <0>;
+		compatible = "everest,es8388";
+		status = "okay";
+	};
 };
 
