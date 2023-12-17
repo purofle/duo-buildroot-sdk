@@ -28,14 +28,19 @@
 	};
 };
 
-&uart4 {
+&uart0 {
 	status = "okay";
 };
 
-&i2c1 {
+&i2c0 {
        status = "okay";
        clock-frequency = <100000>;
 };
+
+&i2s2 {
+	status = "okay";
+	#sound-dai-cells = <0>;
+}
 
 / {
 
