@@ -5,15 +5,15 @@ ${CVI_SHOPTS}
 #
 insmod /mnt/system/ko/cv181x_sys.ko
 insmod /mnt/system/ko/cv181x_base.ko
-insmod /mnt/system/ko/cv181x_rtos_cmdqu.ko
-insmod /mnt/system/ko/cv181x_fast_image.ko
+#insmod /mnt/system/ko/cv181x_rtos_cmdqu.ko
+#insmod /mnt/system/ko/cv181x_fast_image.ko
 insmod /mnt/system/ko/cvi_mipi_rx.ko
 insmod /mnt/system/ko/snsr_i2c.ko
 insmod /mnt/system/ko/cv181x_vi.ko
 insmod /mnt/system/ko/cv181x_vpss.ko
 insmod /mnt/system/ko/cv181x_dwa.ko
 insmod /mnt/system/ko/cv181x_vo.ko
-insmod /mnt/system/ko/cv181x_mipi_tx.ko
+#insmod /mnt/system/ko/cv181x_mipi_tx.ko
 insmod /mnt/system/ko/cv181x_rgn.ko
 
 #insmod /mnt/system/ko/cv181x_wdt.ko

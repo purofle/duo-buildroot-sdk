@@ -3,23 +3,15 @@
 #include <asm/io.h>
 #include <imgs.h>
 #include <ubifs_uboot.h>
+#include <serial.h>
+#include <asm/global_data.h>
+#include <linux/delay.h>
 #ifdef CONFIG_NAND_SUPPORT
 #include <nand.h>
 #endif
 #include "cvi_update.h"
 
-#define COMPARE_STRING_LEN 3
-#define SD_UPDATE_MAGIC 0x4D474E32
-#define ETH_UPDATE_MAGIC 0x4D474E35
-#define USB_DRIVE_UPGRADE_MAGIC 0x55425355
-#define FIP_UPDATE_MAGIC 0x55464950
-#define UPDATE_DONE_MAGIC 0x50524F47
-#define OTA_MAGIC 0x5245434F
-//#define ALWAYS_USB_DRVIVE_UPGRATE
 #define HEADER_SIZE 64
-#define SECTOR_SIZE 0x200
-#define HEADER_MAGIC "CIMG"
-#define MAX_LOADSIZE (16 * 1024 * 1024)
 #ifdef CONFIG_CMD_SAVEENV
 #define SET_DL_COMPLETE()			\
 	do {							\
@@ -35,8 +27,7 @@ static uint32_t lastend;
 #endif
 
 uint32_t update_magic;
-enum chunk_type_e { dont_care = 0, check_crc };
-enum storage_type_e { sd_dl = 0, usb_dl };
+
 
 #if (!defined CONFIG_TARGET_CVITEK_CV181X_FPGA) && (!defined CONFIG_TARGET_CVITEK_ATHENA2_FPGA) && \
 	(!defined ATHENA2_FPGA_PALLDIUM_ENV)
@@ -93,8 +84,10 @@ int _prgImage(char *file, uint32_t chunk_header_size, char *file_name)
 	snprintf(cmd, 255, "nand write %p 0x%x 0x%x",
 		 (void *)file + chunk_header_size, offset, size);
 #elif defined(CONFIG_SPI_FLASH)
-	if (update_magic == SD_UPDATE_MAGIC && (!strcmp(file_name, "fip.bin") ||
-						!strcmp(file_name, "boot.spinor"))) {
+	if (update_magic == SD_UPDATE_MAGIC && (!strcmp(file_name, "fip_spl.bin")
+		|| !strcmp(file_name, "fip.bin")
+		|| !strcmp(file_name, "boot.spinor")
+		|| !strcmp(file_name, "rootfs.spinor"))) {
 		snprintf(cmd, 255, "sf update %p 0x%x 0x%x",
 			 (void *)file + chunk_header_size, offset, size);
 	} else {
@@ -180,6 +173,7 @@ static int _storage_update(enum storage_type_e type)
 	char cmd[255] = { '\0' };
 	char strStorage[10] = { '\0' };
 	uint8_t sd_index = 0;
+	uint8_t fip_name[16] = {0};
 
 	if (type == sd_dl) {
 		printf("Start SD downloading...\n");
@@ -193,8 +187,13 @@ static int _storage_update(enum storage_type_e type)
 #endif
 		snprintf(cmd, 255, "mmc dev %u:1 SD_HS", sd_index);
 		run_command(cmd, 0);
-		snprintf(cmd, 255, "fatload %s %p fip.bin;", strStorage,
-			 (void *)HEADER_ADDR);
+#if defined(CONFIG_SPL)
+		strcpy(fip_name, "fip_spl.bin");
+#else
+		strcpy(fip_name, "fip.bin");
+#endif
+		snprintf(cmd, 255, "fatload %s %p %s;", strStorage,
+			 (void *)HEADER_ADDR, fip_name);
 		ret = run_command(cmd, 0);
 		if (ret) {
 			// Consider SD card without MBR
@@ -208,8 +207,8 @@ static int _storage_update(enum storage_type_e type)
 #endif
 			snprintf(cmd, 255, "mmc dev %u:0 SD_HS", sd_index);
 			run_command(cmd, 0);
-			snprintf(cmd, 255, "fatload %s %p fip.bin;", strStorage,
-				 (void *)HEADER_ADDR);
+			snprintf(cmd, 255, "fatload %s %p %s;", strStorage,
+				 (void *)HEADER_ADDR, fip_name);
 			ret = run_command(cmd, 0);
 			if (ret)
 				return ret;
@@ -306,6 +305,104 @@ static int _usb_update(uint32_t usb_pid)
 }
 #endif
 
+DECLARE_GLOBAL_DATA_PTR;
+static void set_baudrate(unsigned int baudrate)
+{
+	mdelay(50);
+	gd->baudrate = baudrate;
+	serial_setbrg();
+	mdelay(50);
+}
+
+int uart_download(void *buf, const char *filename)
+{
+	int ret = 0;
+	char cmd[255] = { '\0' };
+
+	snprintf(cmd, 255, "loadb %p %d ", (void *)HEADER_ADDR, UART_DL_BAUDRATE);
+	ret = run_command(cmd, 0);
+	if (ret)
+		return ret;
+
+	char *magic = (void *)HEADER_ADDR;
+
+	if (!strncmp(magic, "O", 1)) {
+		printf("File %s not exist, skip it!\n", filename);
+		return ret;
+	}
+
+	uint32_t chunk_header_sz = *(uint32_t *)((uintptr_t)HEADER_ADDR + 8);
+
+	ret = strncmp(magic, HEADER_MAGIC, 4);
+	if (ret) {
+		printf("File %s's magic number is wrong, skip it!\n", filename);
+		return ret;
+	}
+
+	ret = _prgImage((void *)(HEADER_ADDR + HEADER_SIZE), chunk_header_sz, NULL);
+	if (ret == 0) {
+		printf("Program file %s failed!\n", filename);
+		return ret;
+	}
+	return 0;
+}
+
+static int _uart_update(void)
+{
+	int ret = 0;
+	char cmd[255] = { '\0' };
+
+	printf("Start UART downloading... Change boadrate to %d\n", UART_DL_BAUDRATE);
+	set_baudrate(UART_DL_BAUDRATE);
+
+	snprintf(cmd, 255, "loadb %p %d ", (void *)HEADER_ADDR, UART_DL_BAUDRATE);
+	ret = run_command(cmd, 0);
+	if (ret) {
+		printf("Download fip.bin failed!\n");
+		return ret;
+	}
+
+#ifdef CONFIG_NAND_SUPPORT
+	snprintf(cmd, 255, "cvi_sd_update %p spinand fip", (void *)UPDATE_ADDR);
+	pr_debug("%s\n", cmd);
+	ret = run_command(cmd, 0);
+#elif defined(CONFIG_SPI_FLASH)
+	ret = run_command("sf probe", 0);
+	snprintf(cmd, 255, "sf update %p ${fip_PART_OFFSET} ${fip_PART_SIZE};", (void *)UPDATE_ADDR)
+	pr_debug("%s\n", cmd);
+	ret = run_command(cmd, 0);
+#else
+	// Switch to boot partition
+	ret = run_command("mmc dev 0 1", 0);
+	snprintf(cmd, 255, "mmc write %p 0 0x800;", (void *)UPDATE_ADDR);
+	pr_debug("%s\n", cmd);
+	ret = run_command(cmd, 0);
+	snprintf(cmd, 255, "mmc write %p 0x800 0x800;", (void *)UPDATE_ADDR);
+	pr_debug("%s\n", cmd);
+	ret = run_command(cmd, 0);
+	// Switch to user partition
+	ret = run_command("mmc dev 0 0", 0);
+#endif
+	if (ret) {
+		printf("Program fip.bin failed!\n");
+		return ret;
+	}
+
+	SET_DL_COMPLETE();
+	printf("Program fip.bin done\n");
+
+	for (int i = 1; i < ARRAY_SIZE(imgs); i++) {
+		ret = uart_download((void *)HEADER_ADDR, imgs[i]);
+		if (ret) {
+			printf("Load %s failed, skip it!\n", imgs[i]);
+			continue;
+		}
+	}
+	// set_baudrate(CONFIG_BAUDRATE);
+
+	return ret;
+}
+
 static int do_cvi_update(struct cmd_tbl *cmdtp, int flag, int argc,
 			 char *const argv[])
 {
@@ -317,7 +414,10 @@ static int do_cvi_update(struct cmd_tbl *cmdtp, int flag, int argc,
 
 	if (argc == 1) {
 		update_magic = readl((unsigned int *)BOOT_SOURCE_FLAG_ADDR);
-		if (update_magic == SD_UPDATE_MAGIC) {
+		if (update_magic == UART_UPDATE_MAGIC) {
+			run_command("env default -a", 0);
+			ret = _uart_update();
+		} else if (update_magic == SD_UPDATE_MAGIC) {
 			run_command("env default -a", 0);
 			ret = _storage_update(sd_dl);
 		} else if (update_magic == USB_UPDATE_MAGIC) {

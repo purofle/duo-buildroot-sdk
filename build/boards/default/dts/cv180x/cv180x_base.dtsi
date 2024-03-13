@@ -645,6 +645,13 @@
 		cvi,model = "CV182X";
 		cvi,card_name = "cv182x_internal_PDM";
 	};
+	lt9611 {
+		compatible = "cvitek,cv1835-lt9611";
+		cvi,model = "CV182X";
+		cvi,card_name = "cv181x_lt9611";
+		cvi,cpu_dai_name = "4120000.i2s";
+		cvi,platform_name = "4120000.i2s";
+	};
 
 	wifi_pin {
 		compatible = "cvitek,wifi-pin";
@@ -791,7 +798,7 @@
 				<&clk CV180X_CLK_33K_USB>,
 				<&clk CV180X_CLK_12M_USB>;
 		clock-names = "clk_axi", "clk_apb", "clk_125m", "clk_33k", "clk_12m";
-		vbus-gpio = <&portb 6 0>;
+		//vbus-gpio = <&portb 6 0>;
 		status = "okay";
 	};
 

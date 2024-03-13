@@ -18,7 +18,7 @@ function _build_default_env()
 
 function gettop()
 {
-  local TOPFILE=build/cvisetup.sh
+  local TOPFILE=build/milkvsetup.sh
   if [ -n "$TOP" -a -f "$TOP/$TOPFILE" ] ; then
     # The following circumlocution ensures we remove symlinks from TOP.
     (cd "$TOP"; PWD= /bin/pwd)
@@ -250,7 +250,9 @@ function build_middleware()
     if [ -d $(echo ${CHIP_ARCH} | tr A-Z a-z)/ko ];
     then
         rm -rf ko
+        rm -rf ko_shrink
         ln -s $(echo ${CHIP_ARCH} | tr A-Z a-z)/ko ko
+        ln -s $(echo ${CHIP_ARCH} | tr A-Z a-z)/ko_shrink ko_shrink
     fi
   popd
 
@@ -261,6 +263,7 @@ function build_middleware()
   pushd "$MW_PATH"/sample
     make all || return "$?"
     find ./ -type f \( -iname "sample_*" ! -iname "*.*" \) -exec cp '{}' $SYSTEM_OUT_DIR/usr/bin \;
+    find ./ -type f \( -iname "sensor_test" \) -exec cp '{}' $SYSTEM_OUT_DIR/usr/bin \;
   popd
 
   # copy mw lib
@@ -276,6 +279,12 @@ function build_middleware()
 
   # add sdk version
   echo "SDK_VERSION=${SDK_VER}" > "$SYSTEM_OUT_DIR"/sdk-release
+  if [ ! -z "${MV_BOARD// }" ]; then
+    echo "board=${MV_BOARD}" >> "$SYSTEM_OUT_DIR"/sdk-release
+    echo "branch=$(git rev-parse --abbrev-ref HEAD)" >> "$SYSTEM_OUT_DIR"/sdk-release
+    echo "commit=$(git rev-parse --short HEAD)" >> "$SYSTEM_OUT_DIR"/sdk-release
+    echo "time=$(date +"%Y-%m-%d-%H:%M:%S")" >> "$SYSTEM_OUT_DIR"/sdk-release
+  fi
 )}
 
 
@@ -287,6 +296,32 @@ function clean_middleware()
   popd
   pushd "$MW_PATH"/component/isp
   make clean
+  popd
+}
+
+function build_osdrv()
+{(
+  print_notice "Run ${FUNCNAME[0]}() ${1} function"
+
+  cd "$BUILD_PATH" || return
+  make "$ROOTFS_DIR"
+
+  local osdrv_target="$1"
+  if [ -z "$osdrv_target" ]; then
+    osdrv_target=all
+  fi
+
+  pushd "$OSDRV_PATH"
+  make KERNEL_DIR="$KERNEL_PATH"/"$KERNEL_OUTPUT_FOLDER" INSTALL_DIR="$SYSTEM_OUT_DIR"/ko "$osdrv_target" || return "$?"
+  popd
+)}
+
+function clean_osdrv()
+{
+  print_notice "Run ${FUNCNAME[0]}() function"
+
+  pushd "$OSDRV_PATH"
+  make KERNEL_DIR="$KERNEL_PATH"/"$KERNEL_OUTPUT_FOLDER" INSTALL_DIR="$SYSTEM_OUT_DIR"/ko clean || return "$?"
   popd
 }
 
@@ -302,6 +337,7 @@ function build_all()
   # build bsp
   build_uboot || return $?
   build_kernel || return $?
+  build_osdrv || return $?
   build_middleware || return $?
   pack_access_guard_turnkey_app || return $?
   pack_ipc_turnkey_app || return $?
@@ -319,6 +355,7 @@ function clean_all()
   clean_uboot
   clean_kernel
   clean_ramdisk
+  clean_osdrv
   clean_middleware
 }
 
@@ -418,6 +455,7 @@ function cvi_setup_env()
   FREERTOS_PATH="$TOP_DIR"/freertos
   ALIOS_PATH="$TOP_DIR"/alios
   KERNEL_PATH="$TOP_DIR"/"$KERNEL_SRC"
+  OSDRV_PATH="$TOP_DIR"/osdrv
   RAMDISK_PATH="$TOP_DIR"/ramdisk
   BM_BLD_PATH="$TOP_DIR"/bm_bld
   TOOLCHAIN_PATH="$TOP_DIR"/host-tools
@@ -491,19 +529,19 @@ function cvi_setup_env()
   # envs setup for specific ${SDK_VER}
   envs_sdk_ver
 
-  if [ "${STORAGE_TYPE}" == "spinand" ]; then
-    PAGE_SUFFIX=2k
-    if [ ${NANDFLASH_PAGESIZE} == 4096 ]; then
-      PAGE_SUFFIX=4k
-    fi
+#  if [ "${STORAGE_TYPE}" == "spinand" ]; then
+#    PAGE_SUFFIX=2k
+#    if [ ${NANDFLASH_PAGESIZE} == 4096 ]; then
+#      PAGE_SUFFIX=4k
+#    fi
 
-    if [[ "$ENABLE_ALIOS" != "y" ]]; then
-      pushd "$BUILD_PATH"/boards/"${CHIP_ARCH,,}"/"$PROJECT_FULLNAME"/partition/
-      ln -fs ../../../default/partition/partition_spinand_page_"$PAGE_SUFFIX".xml \
-        partition_"$STORAGE_TYPE".xml
-      popd
-    fi
-  fi
+#    if [[ "$ENABLE_ALIOS" != "y" ]]; then
+#      pushd "$BUILD_PATH"/boards/"${CHIP_ARCH,,}"/"$PROJECT_FULLNAME"/partition/
+#      ln -fs ../../../default/partition/partition_spinand_page_"$PAGE_SUFFIX".xml \
+#        partition_"$STORAGE_TYPE".xml
+#      popd
+#    fi
+#  fi
 
   # configure flash partition table
   if [ -z "${STORAGE_TYPE}" ]; then
@@ -519,11 +557,16 @@ function cvi_setup_env()
   export SYSTEM_OUT_DIR
   export CROSS_COMPILE_PATH
   # buildroot config
+  if [ -z "${MV_BOARD// }" ]; then
+    print_error "No MV_BOARD specified!"
+    return 1
+  fi
   export BR_DIR="$TOP_DIR"/buildroot-2021.05
-  export BR_BOARD=milkv_duo_${SDK_VER}
-  export BR_OVERLAY_DIR=${BR_DIR}/board/milkv/duo/overlay
+  export BR_BOARD=${MV_BOARD}_${SDK_VER}
+  export BR_OVERLAY_DIR=${BR_DIR}/board/${MV_VENDOR}/${MV_BOARD}/overlay
   export BR_DEFCONFIG=${BR_BOARD}_defconfig
   export BR_ROOTFS_DIR="$OUTPUT_DIR"/tmp-rootfs
+  export BR_MV_VENDOR_DIR=${BR_DIR}/board/${MV_VENDOR}
 }
 
 cvi_print_env()
