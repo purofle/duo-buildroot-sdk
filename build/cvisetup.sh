@@ -250,7 +250,9 @@ function build_middleware()
     if [ -d $(echo ${CHIP_ARCH} | tr A-Z a-z)/ko ];
     then
         rm -rf ko
+        rm -rf ko_shrink
         ln -s $(echo ${CHIP_ARCH} | tr A-Z a-z)/ko ko
+        ln -s $(echo ${CHIP_ARCH} | tr A-Z a-z)/ko_shrink ko_shrink
     fi
   popd
 
@@ -290,6 +292,32 @@ function clean_middleware()
   popd
 }
 
+function build_osdrv()
+{(
+  print_notice "Run ${FUNCNAME[0]}() ${1} function"
+
+  cd "$BUILD_PATH" || return
+  make "$ROOTFS_DIR"
+
+  local osdrv_target="$1"
+  if [ -z "$osdrv_target" ]; then
+    osdrv_target=all
+  fi
+
+  pushd "$OSDRV_PATH"
+  make KERNEL_DIR="$KERNEL_PATH"/"$KERNEL_OUTPUT_FOLDER" INSTALL_DIR="$SYSTEM_OUT_DIR"/ko "$osdrv_target" || return "$?"
+  popd
+)}
+
+function clean_osdrv()
+{
+  print_notice "Run ${FUNCNAME[0]}() function"
+
+  pushd "$OSDRV_PATH"
+  make KERNEL_DIR="$KERNEL_PATH"/"$KERNEL_OUTPUT_FOLDER" INSTALL_DIR="$SYSTEM_OUT_DIR"/ko clean || return "$?"
+  popd
+}
+
 function clean_ramdisk()
 {
   rm -rf "${RAMDISK_PATH:?}"/"$RAMDISK_OUTPUT_BASE"
@@ -302,6 +330,7 @@ function build_all()
   # build bsp
   build_uboot || return $?
   build_kernel || return $?
+  build_osdrv || return $?
   build_middleware || return $?
   pack_access_guard_turnkey_app || return $?
   pack_ipc_turnkey_app || return $?
@@ -319,6 +348,7 @@ function clean_all()
   clean_uboot
   clean_kernel
   clean_ramdisk
+  clean_osdrv
   clean_middleware
 }
 
@@ -418,6 +448,7 @@ function cvi_setup_env()
   FREERTOS_PATH="$TOP_DIR"/freertos
   ALIOS_PATH="$TOP_DIR"/alios
   KERNEL_PATH="$TOP_DIR"/"$KERNEL_SRC"
+  OSDRV_PATH="$TOP_DIR"/osdrv
   RAMDISK_PATH="$TOP_DIR"/ramdisk
   BM_BLD_PATH="$TOP_DIR"/bm_bld
   TOOLCHAIN_PATH="$TOP_DIR"/host-tools
@@ -515,15 +546,6 @@ function cvi_setup_env()
       return 1
     fi
   fi
-
-  export SYSTEM_OUT_DIR
-  export CROSS_COMPILE_PATH
-  # buildroot config
-  export BR_DIR="$TOP_DIR"/buildroot-2021.05
-  export BR_BOARD=cvitek_${CHIP_ARCH}_${SDK_VER}
-  export BR_OVERLAY_DIR=${BR_DIR}/board/cvitek/${CHIP_ARCH}/overlay
-  export BR_DEFCONFIG=${BR_BOARD}_defconfig
-  export BR_ROOTFS_DIR="$OUTPUT_DIR"/tmp-rootfs
 }
 
 cvi_print_env()

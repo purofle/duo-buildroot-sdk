@@ -222,10 +222,15 @@
 
 	/* config loglevel */
 	#ifdef RELEASE
-		#define OTHERBOOTARGS   "othbootargs=earlycon=sbi release loglevel=0 riscv.fwsz=0x80000\0"
+		#define CONSOLE_LOGLEVEL   " loglevel=0"
+		#define EARLYCON_RELEASE   " release "
 	#else
-		#define OTHERBOOTARGS   "othbootargs=earlycon=sbi loglevel=9 riscv.fwsz=0x80000\0"
+		#define CONSOLE_LOGLEVEL   " loglevel=9"
+		#define EARLYCON_RELEASE   " "
 	#endif
+
+	#define OTHERBOOTARGS   "earlycon=sbi riscv.fwsz="  __stringify(CVIMMAP_OPENSBI_SIZE) \
+		EARLYCON_RELEASE CONSOLE_LOGLEVEL
 
 	/* config mtdids */
 	#ifdef CONFIG_NAND_SUPPORT
@@ -246,7 +251,7 @@
 		"mtdids=" MTDIDS_DEFAULT "\0" \
 		"root=" ROOTARGS "\0" \
 		"sdboot=" SD_BOOTM_COMMAND "\0" \
-		OTHERBOOTARGS \
+		"othbootargs=" OTHERBOOTARGS "\0"\
 		PARTS_OFFSET
 
 /********************************************************************************/
@@ -279,7 +284,7 @@
 		#define SHOWLOGOCMD
 	#endif
 
-	#define SET_BOOTARGS "setenv bootargs ${root} ${mtdparts} " \
+	#define SET_BOOTARGS "setenv bootargs ${reserved_mem} ${root} ${mtdparts} " \
 					"console=$consoledev,$baudrate $othbootargs;"
 
 	#define SD_BOOTM_COMMAND \
@@ -290,10 +295,12 @@
 				UBOOT_VBOOT_BOOTM_COMMAND \
 				"fi;"
 
-	#ifndef CONFIG_SD_BOOT
-		#define CONFIG_BOOTCOMMAND	SHOWLOGOCMD "cvi_update || run norboot || run nandboot ||run emmcboot"
-	#else
+	#ifdef CONFIG_ENABLE_ALIOS_UPDATE
+		#define CONFIG_BOOTCOMMAND	"cvi_update_rtos"
+	#elif CONFIG_SD_BOOT
 		#define CONFIG_BOOTCOMMAND	SHOWLOGOCMD "run sdboot"
+	#else
+		#define CONFIG_BOOTCOMMAND	SHOWLOGOCMD "cvi_update || run norboot || run nandboot ||run emmcboot"
 	#endif
 
 	#if defined(CONFIG_NAND_SUPPORT)
@@ -325,4 +332,9 @@
 
 #endif /* CONFIG_USE_DEFAULT_ENV */
 
+#define CVI_SPL_BOOTAGRS \
+	PARTS " "  \
+	ROOTARGS " " \
+	"console=ttyS0,115200 " \
+	OTHERBOOTARGS "\0"
 #endif /* __CV181X_ASIC_H__ */

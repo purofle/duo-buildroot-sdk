@@ -49,8 +49,6 @@
 };
 
 / {
-	sound {
-		compatible = "cvitek,cv1835-es8328";
-	};
+	model = "Milk-V Duo";
 };
 

@@ -653,7 +653,7 @@
 		cvi,card_name = "cv182x_internal_PDM";
 	};
 
-	wifi_pin {
+	wifi_pin: wifi_pin {
 		compatible = "cvitek,wifi-pin";
 		poweron-gpio = <&porta 18 GPIO_ACTIVE_HIGH>;
 		wakeup-gpio = <&porte 7 GPIO_ACTIVE_HIGH>;
@@ -844,7 +844,7 @@
 				<&clk CV181X_CLK_33K_USB>,
 				<&clk CV181X_CLK_12M_USB>;
 		clock-names = "clk_axi", "clk_apb", "clk_125m", "clk_33k", "clk_12m";
-		vbus-gpio = <&portb 6 0>;
+		//vbus-gpio = <&portb 6 0>;
 		status = "okay";
 	};
 

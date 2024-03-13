@@ -1,7 +1,6 @@
 menu "Target packages"
 
 	source "package/busybox/Config.in"
-	source "package/wiringx/Config.in"
 	source "package/duo-pinmux/Config.in"
 	source "package/skeleton/Config.in"
 	source "package/skeleton-custom/Config.in"
@@ -2527,6 +2526,11 @@ menu "Text editors and viewers"
 	source "package/nano/Config.in"
 	source "package/uemacs/Config.in"
 	source "package/vim/Config.in"
+endmenu
+
+menu "Custom Package"
+	source "package/ncnn/Config.in"
+	source "package/cmatrix/Config.in"
 endmenu
 
 endmenu

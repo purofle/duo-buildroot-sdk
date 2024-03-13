@@ -210,6 +210,8 @@
 		#else
 			#define ROOTARGS "ubi.mtd=ROOTFS ubi.block=0,0"
 		#endif /* CONFIG_SKIP_RAMDISK */
+	#elif defined(CONFIG_SD_BOOT) || defined(CONFIG_EMMC_SUPPORT)
+		#define ROOTARGS "root=" ROOTFS_DEV " rootwait rw"
 	#else
 		#define ROOTARGS "rootfstype=squashfs rootwait ro root=" ROOTFS_DEV
 	#endif
@@ -222,10 +224,15 @@
 
 	/* config loglevel */
 	#ifdef RELEASE
-		#define OTHERBOOTARGS   "othbootargs=earlycon=sbi release loglevel=0 riscv.fwsz=0x80000\0"
+		#define CONSOLE_LOGLEVEL   " loglevel=0"
+		#define EARLYCON_RELEASE   " release "
 	#else
-		#define OTHERBOOTARGS   "othbootargs=earlycon=sbi loglevel=9 riscv.fwsz=0x80000\0"
+		#define CONSOLE_LOGLEVEL   " loglevel=9"
+		#define EARLYCON_RELEASE   " "
 	#endif
+
+	#define OTHERBOOTARGS   "earlycon=sbi riscv.fwsz="  __stringify(CVIMMAP_OPENSBI_SIZE) " " \
+		EARLYCON_RELEASE CONSOLE_LOGLEVEL
 
 	/* config mtdids */
 	#ifdef CONFIG_NAND_SUPPORT
@@ -246,7 +253,7 @@
 		"mtdids=" MTDIDS_DEFAULT "\0" \
 		"root=" ROOTARGS "\0" \
 		"sdboot=" SD_BOOTM_COMMAND "\0" \
-		OTHERBOOTARGS \
+		"othbootargs=" OTHERBOOTARGS "\0" \
 		PARTS_OFFSET
 
 /********************************************************************************/
@@ -279,18 +286,26 @@
 		#define SHOWLOGOCMD
 	#endif
 
-	#define SET_BOOTARGS "setenv bootargs ${root} ${mtdparts} " \
+	#define SET_BOOTARGS "setenv bootargs ${reserved_mem} ${root} ${mtdparts} " \
 					"console=$consoledev,$baudrate $othbootargs;"
 
 	#define SD_BOOTM_COMMAND \
 				SET_BOOTARGS \
-				"echo Boot from SD with ramboot.itb;" \
-				"mmc dev 1 && fatload mmc 1 ${uImage_addr} ramboot.itb; " \
+				"echo Boot from SD ...;" \
+				"mmc dev 0 && fatload mmc 0 ${uImage_addr} boot.sd; " \
 				"if test $? -eq 0; then " \
 				UBOOT_VBOOT_BOOTM_COMMAND \
 				"fi;"
 
-	#define CONFIG_BOOTCOMMAND	SHOWLOGOCMD "cvi_update || run norboot || run nandboot ||run emmcboot"
+	#ifndef CONFIG_SD_BOOT
+		#ifdef CONFIG_ENABLE_ALIOS_UPDATE
+			#define CONFIG_BOOTCOMMAND	"cvi_update_rtos"
+		#else
+			#define CONFIG_BOOTCOMMAND	SHOWLOGOCMD "cvi_update || run norboot || run nandboot ||run emmcboot"
+		#endif
+	#else
+		#define CONFIG_BOOTCOMMAND	SHOWLOGOCMD "run sdboot"
+	#endif
 
 	#if defined(CONFIG_NAND_SUPPORT)
 	/* For spi nand boot, need to reset DMA and its setting before exiting uboot */
@@ -321,4 +336,9 @@
 
 #endif /* CONFIG_USE_DEFAULT_ENV */
 
+#define CVI_SPL_BOOTAGRS \
+	PARTS " "  \
+	ROOTARGS " " \
+	"console=ttyS0,115200 " \
+	OTHERBOOTARGS "\0"
 #endif /* __CV181X_ASIC_H__ */
