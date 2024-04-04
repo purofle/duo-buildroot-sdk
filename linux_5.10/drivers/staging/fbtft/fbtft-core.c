@@ -253,9 +253,11 @@ static void fbtft_reset(struct fbtft_par *par)
 		return;
 	fbtft_par_dbg(DEBUG_RESET, par, "%s()\n", __func__);
 	gpiod_set_value_cansleep(par->gpio.reset, 1);
-	usleep_range(20, 40);
+	msleep(10);
 	gpiod_set_value_cansleep(par->gpio.reset, 0);
-	msleep(120);
+	msleep(200);
+	gpiod_set_value_cansleep(par->gpio.reset, 1);
+	msleep(10);
 }
 
 static void fbtft_update_display(struct fbtft_par *par, unsigned int start_line,

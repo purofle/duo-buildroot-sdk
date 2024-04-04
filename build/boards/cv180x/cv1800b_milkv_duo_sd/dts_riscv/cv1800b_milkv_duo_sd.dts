@@ -22,8 +22,8 @@
 		fps = <60>;
 		rgb;
 		buswidth = <8>;
-		dc = <&porta 14 GPIO_ACTIVE_HIGH>;
-		reset = <&porta 15 GPIO_ACTIVE_HIGH>;
+		dc = <&porta 23 GPIO_ACTIVE_HIGH>;
+		reset = <&porta 24 GPIO_ACTIVE_HIGH>;
 		debug = <0x0>;
 	};
 };

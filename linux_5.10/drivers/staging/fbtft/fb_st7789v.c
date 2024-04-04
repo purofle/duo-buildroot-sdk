@@ -24,8 +24,7 @@
 	"D0 05 0A 09 08 05 2E 44 45 0F 17 16 2B 33\n" \
 	"D0 05 0A 09 08 05 2E 43 45 0F 16 16 2B 33"
 
-#define HSD20_IPS 0
-#define MINI_SCREEN 1
+#define HSD20_IPS 1
 
 /**
  * enum st7789v_command - ST7789V display controller commands
@@ -83,52 +82,46 @@ enum st7789v_command {
  */
 static int init_display(struct fbtft_par *par)
 {
+	par->fbtftops.reset(par);
+	mdelay(100);
+
 	/* turn off sleep mode */
 	write_reg(par, MIPI_DCS_EXIT_SLEEP_MODE);
 	mdelay(120);
 
 	/* set pixel format to RGB-565 */
 	write_reg(par, MIPI_DCS_SET_PIXEL_FORMAT, MIPI_DCS_PIXEL_FMT_16BIT);
-	if (HSD20_IPS || MINI_SCREEN)
+
+	write_reg(par, VCMOFSET, 0x1A);
+
+	if (HSD20_IPS)
 		write_reg(par, PORCTRL, 0x05, 0x05, 0x00, 0x33, 0x33);
+
 	else
 		write_reg(par, PORCTRL, 0x08, 0x08, 0x00, 0x22, 0x22);
 
 	/*
-	 * VGH = 13.26V
-	 * VGL = -10.43V
-	 */
-	if (HSD20_IPS)
-		write_reg(par, GCTRL, 0x75);
-	/**
 	 * VGH = 12.2V
 	 * VGL = -10.43V
 	 */
-	if (MINI_SCREEN)
+	if (HSD20_IPS)
 		write_reg(par, GCTRL, 0x05);
 	else
 		write_reg(par, GCTRL, 0x35);
 
-	// Power control
-	if (MINI_SCREEN)
-		write_reg(par, 0xC0, 0x2C);
+	/* VCOM */
+	write_reg(par, VCOMS, 0x3F);
 
 	/*
 	 * VDV and VRH register values come from command write
 	 * (instead of NVM)
 	 */
-	if (MINI_SCREEN)
-		write_reg(par, VDVVRHEN, 0x01);
-	else
-		write_reg(par, VDVVRHEN, 0x01, 0xFF);
+	write_reg(par, VDVVRHEN, 0x01);
 
 	/*
-	 * VAP =  4.1V + (VCOM + VCOM offset + 0.5 * VDV)
-	 * VAN = -4.1V + (VCOM + VCOM offset + 0.5 * VDV)
+	 * VRH =  4.3V + (VCOM + VCOM offset + VDV)
 	 */
 	if (HSD20_IPS)
-		write_reg(par, VRHS, 0x13);
-	if (MINI_SCREEN)
 		write_reg(par, VRHS, 0x0F);
 	else
 		write_reg(par, VRHS, 0x0B);
@@ -136,16 +129,8 @@ static int init_display(struct fbtft_par *par)
 	/* VDV = 0V */
 	write_reg(par, VDVS, 0x20);
 
-	/* VCOM = 0.9V */
-	if (HSD20_IPS)
-		write_reg(par, VCOMS, 0x22);
-	if (MINI_SCREEN)
-		write_reg(par, VCOMS, 0x3F);
-	else
-		write_reg(par, VCOMS, 0x20);
-
-	/* VCOM offset = 0V */
-	write_reg(par, VCMOFSET, 0x20);
+	/* 111 Hz */
+	write_reg(par, 0xC2, 0x01);
 
 	/*
 	 * AVDD = 6.8V
@@ -153,15 +138,19 @@ static int init_display(struct fbtft_par *par)
 	 * VDS = 2.3V
 	 */
 	write_reg(par, PWCTRL1, 0xA4, 0xA1);
-	if (MINI_SCREEN) {
-		write_reg(par, 0xE8, 0x03); // Power Control 1
-		write_reg(par, 0xE9, 0x09, 0x09, 0x08); // Equalize time control
-	}
+
+	/* 卖屏幕的人给你参考代码里的 我也不知道哪里来的 */
+	write_reg(par, 0xE8, 0x03);
+	write_reg(par, 0xE9, 0x09, 0x09, 0x08);
+	write_reg(par, 0xE0, 0xD0, 0x05, 0x09, 0x09, 0x08, 0x14, 0x28, 0x33,
+		  0x3F, 0x07, 0x13, 0x14, 0x28, 0x30);
+	write_reg(par, 0xE1, 0xD0, 0x05, 0x09, 0x09, 0x08, 0x03, 0x24, 0x32,
+		  0x32, 0x3B, 0x14, 0x13, 0x28, 0x2F);
+
+	if (HSD20_IPS)
+		write_reg(par, MIPI_DCS_ENTER_INVERT_MODE);
 
 	write_reg(par, MIPI_DCS_SET_DISPLAY_ON);
-
-	if (HSD20_IPS || MINI_SCREEN)
-		write_reg(par, MIPI_DCS_ENTER_INVERT_MODE);
 
 	return 0;
 }
@@ -271,10 +260,24 @@ static int blank(struct fbtft_par *par, bool on)
 	return 0;
 }
 
+static void set_addr_win(struct fbtft_par *par, int xs, int ys, int xe, int ye)
+{
+	unsigned int x = xs, y = xe;
+
+	write_reg(par, MIPI_DCS_SET_COLUMN_ADDRESS, (x >> 8), x, (y >> 8), y);
+
+	x = ys + 20;
+	y = ye + 20;
+
+	write_reg(par, MIPI_DCS_SET_PAGE_ADDRESS, (x >> 8), x, (y >> 8), y);
+
+	write_reg(par, MIPI_DCS_WRITE_MEMORY_START);
+}
+
 static struct fbtft_display display = {
 	.regwidth = 8,
 	.width = 240,
-	.height = 320,
+	.height = 280,
 	.gamma_num = 2,
 	.gamma_len = 14,
 	.gamma = HSD20_IPS_GAMMA,
@@ -283,6 +286,7 @@ static struct fbtft_display display = {
 		.set_var = set_var,
 		.set_gamma = set_gamma,
 		.blank = blank,
+		.set_addr_win = set_addr_win,
 	},
 };
 
