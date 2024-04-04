@@ -24,7 +24,8 @@
 	"D0 05 0A 09 08 05 2E 44 45 0F 17 16 2B 33\n" \
 	"D0 05 0A 09 08 05 2E 43 45 0F 16 16 2B 33"
 
-#define HSD20_IPS 1
+#define HSD20_IPS 0
+#define MINI_SCREEN 1
 
 /**
  * enum st7789v_command - ST7789V display controller commands
@@ -88,9 +89,8 @@ static int init_display(struct fbtft_par *par)
 
 	/* set pixel format to RGB-565 */
 	write_reg(par, MIPI_DCS_SET_PIXEL_FORMAT, MIPI_DCS_PIXEL_FMT_16BIT);
-	if (HSD20_IPS)
+	if (HSD20_IPS || MINI_SCREEN)
 		write_reg(par, PORCTRL, 0x05, 0x05, 0x00, 0x33, 0x33);
-
 	else
 		write_reg(par, PORCTRL, 0x08, 0x08, 0x00, 0x22, 0x22);
 
@@ -100,14 +100,27 @@ static int init_display(struct fbtft_par *par)
 	 */
 	if (HSD20_IPS)
 		write_reg(par, GCTRL, 0x75);
+	/**
+	 * VGH = 12.2V
+	 * VGL = -10.43V
+	 */
+	if (MINI_SCREEN)
+		write_reg(par, GCTRL, 0x05);
 	else
 		write_reg(par, GCTRL, 0x35);
+
+	// Power control
+	if (MINI_SCREEN)
+		write_reg(par, 0xC0, 0x2C);
 
 	/*
 	 * VDV and VRH register values come from command write
 	 * (instead of NVM)
 	 */
-	write_reg(par, VDVVRHEN, 0x01, 0xFF);
+	if (MINI_SCREEN)
+		write_reg(par, VDVVRHEN, 0x01);
+	else
+		write_reg(par, VDVVRHEN, 0x01, 0xFF);
 
 	/*
 	 * VAP =  4.1V + (VCOM + VCOM offset + 0.5 * VDV)
@@ -115,6 +128,8 @@ static int init_display(struct fbtft_par *par)
 	 */
 	if (HSD20_IPS)
 		write_reg(par, VRHS, 0x13);
+	if (MINI_SCREEN)
+		write_reg(par, VRHS, 0x0F);
 	else
 		write_reg(par, VRHS, 0x0B);
 
@@ -124,6 +139,8 @@ static int init_display(struct fbtft_par *par)
 	/* VCOM = 0.9V */
 	if (HSD20_IPS)
 		write_reg(par, VCOMS, 0x22);
+	if (MINI_SCREEN)
+		write_reg(par, VCOMS, 0x3F);
 	else
 		write_reg(par, VCOMS, 0x20);
 
@@ -136,10 +153,14 @@ static int init_display(struct fbtft_par *par)
 	 * VDS = 2.3V
 	 */
 	write_reg(par, PWCTRL1, 0xA4, 0xA1);
+	if (MINI_SCREEN) {
+		write_reg(par, 0xE8, 0x03); // Power Control 1
+		write_reg(par, 0xE9, 0x09, 0x09, 0x08); // Equalize time control
+	}
 
 	write_reg(par, MIPI_DCS_SET_DISPLAY_ON);
 
-	if (HSD20_IPS)
+	if (HSD20_IPS || MINI_SCREEN)
 		write_reg(par, MIPI_DCS_ENTER_INVERT_MODE);
 
 	return 0;
