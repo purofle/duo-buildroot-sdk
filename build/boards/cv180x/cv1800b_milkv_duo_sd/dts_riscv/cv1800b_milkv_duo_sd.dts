@@ -12,18 +12,12 @@
 	status = "okay";
 	/delete-node/ spidev@0;
 	st7789v: st7789v@0{
-		compatible = "sitronix,st7789v";
+		compatible = "sitronix,st7789v_240x280";
 		reg = <0>;
 		status = "okay";
 		spi-max-frequency = <48000000>;
-		spi-cpol;
-		spi-cpha;
-		rotate = <0>;
-		fps = <60>;
-		rgb;
-		buswidth = <8>;
-		dc = <&porta 23 GPIO_ACTIVE_HIGH>;
-		reset = <&porta 24 GPIO_ACTIVE_HIGH>;
+		dc-gpios = <&porta 23 GPIO_ACTIVE_HIGH>;
+		reset-gpios = <&porta 24 GPIO_ACTIVE_HIGH>;
 		debug = <0x0>;
 	};
 };
